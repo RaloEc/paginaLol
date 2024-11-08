@@ -68,14 +68,18 @@ router.get(
   "/lol/league/v4/entries/by-summoner/:summonerId",
   async (req, res) => {
     const { summonerId } = req.params;
-
+    console.log("Received summonerId:", summonerId);
+    console.log("Petición recibida desde frontend, summonerId:", summonerId);
     try {
       const response = await axios.get(
         `https://la1.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}?api_key=${RIOT_API_KEY}`
       );
       res.json(response.data);
     } catch (error) {
-      console.error("Error al obtener la división:", error);
+      console.error(
+        "Error al obtener la división:",
+        error.response ? error.response.data : error.message
+      );
       res.status(500).json({ error: "Error al comunicarse con Riot API" });
     }
   }
@@ -111,4 +115,91 @@ router.get("/riot/endpoint", async (req, res) => {
   }
 });
 
-module.exports = router;
+// Ruta para obtener el historial de partidas usando el PUUID
+router.get("/lol/match/v5/matches/by-puuid/:puuid/ids", async (req, res) => {
+  const { puuid } = req.params;
+  const { start = 0, count = 2 } = req.query; // Se pueden agregar parámetros para limitar la cantidad de partidas y la paginación
+
+  try {
+    console.log(`Obteniendo historial de partidas para PUUID: ${puuid}`); // Verificar si se alcanza la ruta
+    const response = await axios.get(
+      `https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=${start}&count=${count}&api_key=${RIOT_API_KEY}`
+    );
+    console.log("Historial de partidas obtenido:", response.data); // Mostrar los datos obtenidos
+    res.json(response.data);
+  } catch (error) {
+    if (error.response) {
+      console.error(
+        "Error al obtener el historial de partidas:",
+        error.response.status,
+        error.response.data
+      );
+      res.status(error.response.status).json({ error: error.response.data });
+    } else {
+      console.error("Error desconocido:", error.message);
+      res.status(500).json({ error: "Error al comunicarse con Riot API" });
+    }
+  }
+});
+
+// Obtener detalles de una partida por matchId
+router.get("/lol/match/v5/matches/:matchId", async (req, res) => {
+  const { matchId } = req.params;
+
+  try {
+    const response = await axios.get(
+      `https://americas.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${RIOT_API_KEY}`
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error(
+      `Error al obtener los detalles de la partida ${matchId}:`,
+      error
+    );
+    res.status(500).json({
+      error: `No se pudieron obtener los detalles de la partida ${matchId}`,
+    });
+  }
+});
+
+// Ruta para verificar si el invocador está en partida
+router.get(
+  "/lol/spectator/v5/active-games/by-summoner/:encryptedPUUID",
+  async (req, res) => {
+    console.log("Ruta alcanzada"); // Verificar si se alcanza la ruta
+    const { encryptedPUUID } = req.params;
+
+    try {
+      const response = await axios.get(
+        `https://la1.api.riotgames.com/riot/lol/spectator/v5/active-games/by-summoner/${encryptedPUUID}?api_key=${process.env.RIOT_API_KEY}`
+      );
+
+      // Mostrar toda la respuesta de la API de Riot
+      console.log("Respuesta completa de Riot API:", response.data);
+
+      // Si la respuesta tiene datos, significa que el jugador está en partida
+      if (response.data && response.data.gameId) {
+        res.json(response.data); // Devuelve los datos de la partida
+      } else {
+        res.status(404).json({ message: "No estás en partida." });
+      }
+    } catch (error) {
+      // Verificar si es un error 404 u otro error
+      if (error.response) {
+        console.log(
+          "Error de Riot API:",
+          error.response.status,
+          error.response.data
+        );
+        if (error.response.status === 404) {
+          return res.status(404).json({ message: "No estás en partida." });
+        }
+      } else {
+        console.error("Error desconocido:", error.message);
+        res.status(500).json({ error: "Error al comunicarse con Riot API" });
+      }
+    }
+  }
+);
+
+module.exports = router; // Asegúrate de exportar el router
